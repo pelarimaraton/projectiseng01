@@ -7,6 +7,14 @@ import numpy as np
 # ==== CONFIG ====
 st.set_page_config(page_title="Mohamed Salah Premier League Dashboard", layout="wide")
 
+# ==== HEADER ====
+st.title("📊 Mohamed Salah Premier League Dashboard")
+st.markdown("""
+**Statistik komprehensif Mohamed Salah selama bermain di Premier League**.  
+Data ini mencakup jumlah gol, assist, expected goals (xG), shot accuracy, dan berbagai metrik lain  
+yang membantu memahami kontribusi Salah di setiap musimnya.
+""")
+
 # ==== LOAD DATA ====
 @st.cache_data
 def load_data():
@@ -14,7 +22,6 @@ def load_data():
     df = pd.read_csv(url)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-    # Season extraction
     def get_season(date):
         if pd.isna(date):
             return "Unknown"
@@ -22,7 +29,6 @@ def load_data():
         return f"{y}-{str(y+1)[-2:]}" if date.month >= 7 else f"{y-1}-{str(y)[-2:]}"
     df["Season"] = df["Date"].apply(get_season)
 
-    # Convert numeric safely
     num_cols = ["Gls", "Ast", "PK", "PKatt", "Sh", "SoT", "xG", "npxG", "xAG", "SCA", "GCA", "Cmp%", "Touches", "Min"]
     for col in num_cols:
         if col in df.columns:
@@ -79,16 +85,14 @@ with tab1:
         y="Gls",
         size=df_filtered["Sh"].abs(),
         color="Season",
-        trendline="ols",
         hover_data=["Date", "Opponent", "Season"],
-        title="xG vs Goals (dengan Trendline)"
+        title="xG vs Goals"
     )
     st.plotly_chart(fig2, use_container_width=True)
 
 # ==== TAB 2 (GOAL MAP) ====
 with tab2:
     st.subheader("Peta Gol Mohamed Salah (Simulasi)")
-    # Membuat simulasi koordinat tembakan
     np.random.seed(42)
     shots_x = np.random.uniform(0, 100, size=len(df_filtered))
     shots_y = np.random.uniform(0, 100, size=len(df_filtered))
@@ -118,7 +122,6 @@ with tab2:
 # ==== TAB 3 ====
 with tab3:
     st.subheader("Heatmap Goals per Season & MatchDay")
-    heatmap_data = df.groupby(["Season"]).agg({"Gls":"sum"}).reset_index()
     fig_heatmap = px.density_heatmap(
         df, x="Season", y=df.index, z="Gls",
         title="Distribusi Gol Berdasarkan Musim & Matchday"
