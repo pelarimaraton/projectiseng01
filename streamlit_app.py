@@ -1,129 +1,132 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-# ===============================
-# Judul dan Deskripsi
-# ===============================
 st.set_page_config(page_title="Statistik Mohamed Salah - Premier League", layout="wide")
 
-st.title("📊 Statistik Mohamed Salah di Premier League")
-st.markdown("""
-Analisis performa **Mohamed Salah** selama bermain di **Premier League**.
-Data ini mencakup **Goals**, **Assists**, **Expected Goals (xG)**, tembakan, dan peta posisi gol.
-
-**Apa itu xG (Expected Goals)?**  
-xG adalah metrik yang mengukur peluang sebuah tembakan menjadi gol, berdasarkan posisi, sudut tembak, dan tipe assist.
-Semakin tinggi xG, semakin besar kemungkinan peluang tersebut berbuah gol.
-""")
-
-# ===============================
-# Load Data
-# ===============================
+# =======================
+# LOAD DATA
+# =======================
 @st.cache_data
 def load_data():
-    # Ganti ini dengan path/URL dataset asli Anda
-    df = pd.read_csv("mohamed_salah_premier_league.csv")
-    return df
+    try:
+        return pd.read_csv("Salah-Stat-PrimerLeague.csv")
+    except FileNotFoundError:
+        # fallback kalau file diambil dari repo GitHub
+        url = "https://raw.githubusercontent.com/USERNAME/REPO/main/Salah-Stat-PrimerLeague.csv"
+        return pd.read_csv(url)
 
 df = load_data()
 
-# Pastikan kolom tanggal dalam format datetime
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+# Pastikan kolom yang dibutuhkan ada
+expected_cols = ["Season", "HomeAway", "Goals", "Assists", "xG", "Shots", "MatchDate", "Opponent", "xA", "Touches", "Passes", "GoalLocationX", "GoalLocationY"]
+missing_cols = [c for c in expected_cols if c not in df.columns]
+if missing_cols:
+    st.error(f"Kolom berikut hilang dari data: {missing_cols}")
+    st.stop()
 
-# ===============================
-# Sidebar Filter
-# ===============================
-st.sidebar.header("🔍 Filter Data")
-season_options = sorted(df["Season"].unique())
-venue_options = sorted(df["Venue"].unique())
+# Konversi tanggal
+df["MatchDate"] = pd.to_datetime(df["MatchDate"])
 
-selected_season = st.sidebar.multiselect("Pilih Season", season_options, default=season_options)
-selected_venue = st.sidebar.multiselect("Pilih Venue", venue_options, default=venue_options)
+# =======================
+# SIDEBAR FILTER
+# =======================
+st.sidebar.header("Filter Data")
+season_filter = st.sidebar.multiselect("Pilih Musim", sorted(df["Season"].unique()), default=sorted(df["Season"].unique()))
+homeaway_filter = st.sidebar.multiselect("Home / Away", df["HomeAway"].unique(), default=df["HomeAway"].unique())
 
-# Filter Data
-df_filtered = df[(df["Season"].isin(selected_season)) & (df["Venue"].isin(selected_venue))]
+df_filtered = df[(df["Season"].isin(season_filter)) & (df["HomeAway"].isin(homeaway_filter))]
 
-# ===============================
-# Tren Musiman: Goals, Assists, xG
-# ===============================
-st.subheader("📈 Tren Musiman")
+# =======================
+# HEADER
+# =======================
+st.title("📊 Statistik Mohamed Salah - Premier League")
+st.markdown("""
+Aplikasi ini menampilkan statistik performa **Mohamed Salah** selama bermain di Premier League.
+Data meliputi **Goals**, **Assists**, **xG (Expected Goals)**, **xA (Expected Assists)**, jumlah tembakan, sentuhan bola, hingga lokasi gol.
+""")
 
-if df_filtered.empty:
-    st.warning("⚠️ Data tidak tersedia untuk filter yang dipilih.")
-else:
-    trend_data = df_filtered.groupby("Season")[["Gls", "Ast", "xG"]].sum().reset_index()
-    fig_trend = px.line(
-        trend_data,
-        x="Season",
-        y=["Gls", "Ast", "xG"],
-        markers=True,
-        title="Tren Goals, Assists, dan xG per Season"
-    )
-    st.plotly_chart(fig_trend, use_container_width=True)
+# =======================
+# KPI CARD
+# =======================
+total_goals = df_filtered["Goals"].sum()
+total_assists = df_filtered["Assists"].sum()
+avg_xg = df_filtered["xG"].mean()
+avg_xa = df_filtered["xA"].mean()
 
-# ===============================
-# Scatter Plot: xG vs Goals
-# ===============================
-st.subheader("🎯 xG vs Goals")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("⚽ Total Goals", total_goals)
+col2.metric("🎯 Total Assists", total_assists)
+col3.metric("📈 Rata-rata xG", f"{avg_xg:.2f}")
+col4.metric("🅰️ Rata-rata xA", f"{avg_xa:.2f}")
 
-scatter_data = df_filtered.copy()
-scatter_data["xG"] = pd.to_numeric(scatter_data["xG"], errors="coerce")
-scatter_data["Gls"] = pd.to_numeric(scatter_data["Gls"], errors="coerce")
-scatter_data["Sh"] = pd.to_numeric(scatter_data["Sh"], errors="coerce")
-scatter_data = scatter_data.dropna(subset=["xG", "Gls", "Sh"])
+# =======================
+# TREN MUSIMAN
+# =======================
+st.subheader("📅 Tren Musiman: Goals, Assists, xG")
+fig_trend = go.Figure()
+fig_trend.add_trace(go.Scatter(x=df_filtered["MatchDate"], y=df_filtered["Goals"], mode="lines+markers", name="Goals"))
+fig_trend.add_trace(go.Scatter(x=df_filtered["MatchDate"], y=df_filtered["Assists"], mode="lines+markers", name="Assists"))
+fig_trend.add_trace(go.Scatter(x=df_filtered["MatchDate"], y=df_filtered["xG"], mode="lines+markers", name="xG"))
 
-if scatter_data.empty:
-    st.warning("⚠️ Data tidak tersedia untuk kombinasi filter ini.")
-else:
-    fig_scatter = px.scatter(
-        scatter_data,
-        x="xG",
-        y="Gls",
-        size="Sh",
-        color="Season",
-        hover_data=["Date", "Opponent", "Venue"],
-        title="xG vs Goals (Bubble size = Shots)"
-    )
-    st.plotly_chart(fig_scatter, use_container_width=True)
+fig_trend.update_layout(title="Perkembangan Goals, Assists, dan xG per Pertandingan", xaxis_title="Tanggal", yaxis_title="Jumlah / Nilai", hovermode="x unified")
+st.plotly_chart(fig_trend, use_container_width=True)
 
-# ===============================
-# Heatmap Gol (Goal Map)
-# ===============================
-st.subheader("🗺️ Peta Gol Mohamed Salah")
+# =======================
+# SCATTER xG vs GOALS
+# =======================
+st.subheader("📊 Hubungan xG vs Goals")
+st.markdown("""
+**xG (Expected Goals)** adalah metrik yang mengukur seberapa besar kemungkinan sebuah tembakan menjadi gol.
+Semakin tinggi xG, semakin besar peluangnya menjadi gol. 
+Grafik ini membandingkan jumlah gol aktual dengan nilai xG.
+""")
 
-if {"x", "y"}.issubset(df_filtered.columns):
-    heatmap_data = df_filtered.dropna(subset=["x", "y"])
-    if heatmap_data.empty:
-        st.warning("⚠️ Data posisi gol tidak tersedia untuk filter ini.")
-    else:
-        fig_heatmap = px.density_heatmap(
-            heatmap_data,
-            x="x",
-            y="y",
-            nbinsx=20,
-            nbinsy=20,
-            color_continuous_scale="Reds",
-            title="Peta Kepadatan Gol/Tembakan"
-        )
-        fig_heatmap.update_yaxes(autorange="reversed")  # agar sesuai tampilan lapangan
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-else:
-    st.info("ℹ️ Data tidak memiliki koordinat posisi gol (kolom x, y).")
+fig_scatter = px.scatter(
+    df_filtered,
+    x="xG",
+    y="Goals",
+    size="Shots",
+    color="Season",
+    hover_data=["MatchDate", "Opponent", "Assists", "xA"],
+    title="xG vs Goals (Ukuran bubble = jumlah tembakan)"
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
 
-# ===============================
-# Ringkasan Statistik
-# ===============================
-st.subheader("📋 Ringkasan Statistik")
-if not df_filtered.empty:
-    total_goals = df_filtered["Gls"].sum()
-    total_assists = df_filtered["Ast"].sum()
-    total_xg = df_filtered["xG"].sum()
-    total_shots = df_filtered["Sh"].sum()
+# =======================
+# PETA GOL
+# =======================
+st.subheader("🗺️ Peta Lokasi Gol")
+st.markdown("Visualisasi posisi di mana Mohamed Salah mencetak gol (koordinat lapangan).")
+fig_pitch = px.scatter(
+    df_filtered[df_filtered["Goals"] > 0],
+    x="GoalLocationX",
+    y="GoalLocationY",
+    color="Season",
+    hover_data=["MatchDate", "Opponent", "Goals"],
+    title="Lokasi Gol Mohamed Salah",
+    size="Goals"
+)
+fig_pitch.update_yaxes(scaleanchor="x", scaleratio=0.7)
+st.plotly_chart(fig_pitch, use_container_width=True)
 
-    st.metric("Total Goals", total_goals)
-    st.metric("Total Assists", total_assists)
-    st.metric("Total xG", round(total_xg, 2))
-    st.metric("Total Shots", total_shots)
-else:
-    st.warning("Tidak ada data untuk ditampilkan pada ringkasan statistik.")
+# =======================
+# DISTRIBUSI TEMBAKAN
+# =======================
+st.subheader("📍 Distribusi Tembakan per Musim")
+fig_shots = px.box(
+    df_filtered,
+    x="Season",
+    y="Shots",
+    color="Season",
+    title="Distribusi Jumlah Tembakan per Musim"
+)
+st.plotly_chart(fig_shots, use_container_width=True)
+
+# =======================
+# TABEL DATA
+# =======================
+st.subheader("📋 Data Pertandingan")
+st.dataframe(df_filtered.sort_values("MatchDate", ascending=False))
+
