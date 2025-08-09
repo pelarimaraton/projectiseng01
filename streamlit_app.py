@@ -3,206 +3,151 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ---------------------------
-# 1. Konfigurasi Halaman
-# ---------------------------
-st.set_page_config(
-    page_title="Mohamed Salah Premier League Stats",
-    layout="wide",
-    page_icon="⚽"
-)
-
-st.title("⚽ Dashboard Statistik Mohamed Salah - Premier League")
-st.markdown("""
-Dashboard ini menampilkan **statistik detail Mohamed Salah** di Premier League:  
-- **Goals, Assists, xG, xAG, Shots, Passing, Dribbling**
-- Filter berdasarkan **musim** dan **Home/Away**
-- Visualisasi interaktif termasuk **line chart, scatter plot, heatmap, radar chart**
-""")
+st.set_page_config(page_title="Statistik Mohamed Salah", layout="wide")
 
 # ---------------------------
-# 2. Load Data
+# 1. Load Data
 # ---------------------------
 @st.cache_data
 def load_data():
     df = pd.read_csv("Salah-Stat-PrimerLeague.csv")
+    df.rename(columns={
+        "Date": "MatchDate",
+        "Gls": "Goals",
+        "Ast": "Assists",
+        "Sh": "Shots",
+        "xG": "xG",
+        "xAG": "xAG",
+        "Cmp%": "PassAccuracy",
+        "Succ": "DribblesCompleted",
+        "Att.1": "DribblesAttempted"
+    }, inplace=True)
+    df["MatchDate"] = pd.to_datetime(df["MatchDate"])
+    df["HomeAway"] = df["Venue"].apply(lambda x: "Home" if x.lower() == "home" else "Away")
     return df
 
 df = load_data()
 
 # ---------------------------
-# 3. Bersihkan & Siapkan Data
+# 2. Sidebar Filter
 # ---------------------------
-df.columns = df.columns.str.strip()
-df.rename(columns={
-    "Gls": "Goals",
-    "Ast": "Assists",
-    "Sh": "Shots"
-}, inplace=True)
+st.sidebar.header("⚙️ Filter Data")
+seasons = st.sidebar.multiselect("Pilih Musim", df["Season"].unique(), default=df["Season"].unique())
+venues = st.sidebar.multiselect("Pilih Venue (Home/Away)", df["HomeAway"].unique(), default=df["HomeAway"].unique())
 
-numeric_cols = ["Goals", "Assists", "Shots", "xG", "npxG", "xAG", "Cmp", "Att", "Cmp%", "PrgP", "Carries", "PrgC"]
-for col in numeric_cols:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-df["HomeAway"] = df["Venue"].apply(lambda x: "Home" if x.strip().lower() == "home" else "Away")
+df_filtered = df[(df["Season"].isin(seasons)) & (df["HomeAway"].isin(venues))]
 
 # ---------------------------
-# 4. Filter Sidebar
+# 3. Penjelasan Statistik
 # ---------------------------
-seasons = sorted(df["Season"].unique())
-home_away_options = ["All", "Home", "Away"]
-
-selected_season = st.sidebar.selectbox("📅 Pilih Season", ["All"] + seasons)
-selected_ha = st.sidebar.selectbox("🏟 Pilih Home/Away", home_away_options)
-
-df_filtered = df.copy()
-if selected_season != "All":
-    df_filtered = df_filtered[df_filtered["Season"] == selected_season]
-if selected_ha != "All":
-    df_filtered = df_filtered[df_filtered["HomeAway"] == selected_ha]
-
-# ---------------------------
-# 5. Ringkasan Statistik Menarik
-# ---------------------------
-st.subheader("📊 Ringkasan Statistik")
-
-total_goals = int(df_filtered["Goals"].sum())
-total_assists = int(df_filtered["Assists"].sum())
-total_shots = int(df_filtered["Shots"].sum())
-total_xg = round(df_filtered["xG"].sum(), 2)
-total_xag = round(df_filtered["xAG"].sum(), 2)
-
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.markdown(f"""
-    <div style="background-color:#ff4b4b;padding:20px;border-radius:10px;text-align:center">
-        <h2 style="color:white">{total_goals}</h2>
-        <p style="color:white;font-weight:bold">Goals</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div style="background-color:#4bafff;padding:20px;border-radius:10px;text-align:center">
-        <h2 style="color:white">{total_assists}</h2>
-        <p style="color:white;font-weight:bold">Assists</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div style="background-color:#4bff88;padding:20px;border-radius:10px;text-align:center">
-        <h2 style="color:white">{total_shots}</h2>
-        <p style="color:white;font-weight:bold">Shots</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col4:
-    st.markdown(f"""
-    <div style="background-color:#ff884b;padding:20px;border-radius:10px;text-align:center">
-        <h2 style="color:white">{total_xg}</h2>
-        <p style="color:white;font-weight:bold">Expected Goals (xG)</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col5:
-    st.markdown(f"""
-    <div style="background-color:#aa4bff;padding:20px;border-radius:10px;text-align:center">
-        <h2 style="color:white">{total_xag}</h2>
-        <p style="color:white;font-weight:bold">Expected Assists (xAG)</p>
-    </div>
-    """, unsafe_allow_html=True)
+with st.expander("📖 Penjelasan Istilah Statistik"):
+    st.markdown("""
+    - **Goals (Gls)** → Jumlah gol yang dicetak.
+    - **Assists (Ast)** → Umpan yang langsung menghasilkan gol.
+    - **xG (Expected Goals)** → Perkiraan peluang menjadi gol berdasarkan kualitas peluang (lokasi, tipe tembakan, dll).
+    - **xAG (Expected Assisted Goals)** → Perkiraan peluang menjadi gol dari umpan yang diberikan.
+    - **Shots (Sh)** → Jumlah tembakan ke gawang.
+    - **Passing Accuracy (Cmp%)** → Persentase keberhasilan umpan.
+    - **Dribbling** → Upaya melewati lawan sambil membawa bola.
+    """)
 
 # ---------------------------
-# 6. Tren Musiman
+# 4. Ringkasan Statistik
 # ---------------------------
-st.subheader("📈 Tren Goals, Assists, xG per Musim")
-trend_df = df_filtered.groupby("Season")[["Goals", "Assists", "xG"]].sum().reset_index()
-fig_trend = px.line(
-    trend_df, x="Season", y=["Goals", "Assists", "xG"],
+st.subheader("📊 Ringkasan Statistik Mohamed Salah")
+
+col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+col1.metric("⚽ Goals", df_filtered["Goals"].sum())
+col2.metric("🎯 Assists", df_filtered["Assists"].sum())
+col3.metric("📈 xG", round(df_filtered["xG"].sum(), 2))
+col4.metric("📊 xAG", round(df_filtered["xAG"].sum(), 2))
+col5.metric("🔫 Shots", df_filtered["Shots"].sum())
+col6.metric("🎯 Passing Acc (%)", round(df_filtered["PassAccuracy"].mean(), 2))
+col7.metric("💨 Dribbles", df_filtered["DribblesCompleted"].sum())
+
+# ---------------------------
+# 5. Line Chart (Tren Statistik)
+# ---------------------------
+st.subheader("📈 Tren Statistik per Pertandingan")
+fig_line = px.line(
+    df_filtered.sort_values("MatchDate"),
+    x="MatchDate",
+    y=["Goals", "Assists", "xG", "xAG", "Shots"],
     markers=True,
-    color_discrete_sequence=["#ff4b4b", "#4bafff", "#4bff88"],
-    labels={"value": "Jumlah", "variable": "Statistik"},
-    title="Tren Goals, Assists, xG"
+    title="Tren Goals, Assists, xG, xAG, Shots"
 )
-st.plotly_chart(fig_trend, use_container_width=True)
+st.plotly_chart(fig_line, use_container_width=True)
 
 # ---------------------------
-# 7. Scatter xG vs Goals
+# 6. Scatter Plot (xG vs Goals)
 # ---------------------------
-st.subheader("⚽ Hubungan xG dengan Goals")
+st.subheader("⚽ xG vs Goals")
 fig_scatter = px.scatter(
     df_filtered,
-    x="xG", y="Goals",
-    size="Shots", color="Season",
-    hover_data=["Date", "Opponent", "Result", "Shots"],
-    color_discrete_sequence=px.colors.qualitative.Set2,
-    title="xG vs Goals (Bubble = Shots)"
+    x="xG",
+    y="Goals",
+    size="Shots",
+    color="Season",
+    hover_data=["Opponent", "MatchDate"],
+    title="xG vs Goals (Bubble size = Shots)"
 )
 st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ---------------------------
-# 8. Heatmap Performansi
+# 7. Heatmap Statistik vs Lawan
 # ---------------------------
-st.subheader("🔥 Heatmap Statistik")
+st.subheader("🔥 Heatmap Statistik vs Lawan")
 heatmap_df = df_filtered.groupby("Opponent")[["Goals", "Assists", "xG", "xAG", "Shots"]].sum()
+heatmap_df["TotalImpact"] = heatmap_df["Goals"] + heatmap_df["xG"]
+heatmap_df = heatmap_df.sort_values("TotalImpact", ascending=False)
+
 fig_heatmap = px.imshow(
-    heatmap_df,
-    text_auto=True,
-    color_continuous_scale="Reds",
-    title="Heatmap Performansi Lawan"
+    heatmap_df.drop(columns=["TotalImpact"]),
+    text_auto=".1f",
+    color_continuous_scale=["#1a9850", "#fee08b", "#d73027"],
+    title="Heatmap Statistik vs Lawan"
+)
+fig_heatmap.update_layout(
+    xaxis_title="Statistik",
+    yaxis_title="Lawan",
+    font=dict(size=12)
 )
 st.plotly_chart(fig_heatmap, use_container_width=True)
 
 # ---------------------------
-# 9. Radar Chart
+# 8. Radar Chart (Perbandingan Kemampuan)
 # ---------------------------
-st.subheader("🎯 Radar Chart: Keterampilan")
-radar_stats = {
-    "Goals": total_goals,
-    "Assists": total_assists,
-    "xG": total_xg,
-    "xAG": total_xag,
-    "Shots": total_shots,
-    "Progressive Passes": df_filtered["PrgP"].sum(),
-    "Progressive Carries": df_filtered["PrgC"].sum()
+st.subheader("🕹️ Radar Chart Statistik Rata-rata")
+avg_stats = {
+    "Goals": df_filtered["Goals"].mean(),
+    "Assists": df_filtered["Assists"].mean(),
+    "Shots": df_filtered["Shots"].mean(),
+    "Passing Accuracy": df_filtered["PassAccuracy"].mean(),
+    "Dribbling Success": (df_filtered["DribblesCompleted"].sum() / max(df_filtered["DribblesAttempted"].sum(), 1)) * 100
 }
-categories = list(radar_stats.keys())
-values = list(radar_stats.values())
-values += values[:1]
+
+radar_df = pd.DataFrame({
+    "Stat": list(avg_stats.keys()),
+    "Value": list(avg_stats.values())
+})
 
 fig_radar = go.Figure()
 fig_radar.add_trace(go.Scatterpolar(
-    r=values,
-    theta=categories + [categories[0]],
-    fill='toself',
-    name='Statistik',
-    line_color="#ff4b4b"
+    r=radar_df["Value"],
+    theta=radar_df["Stat"],
+    fill="toself",
+    name="Rata-rata"
 ))
 fig_radar.update_layout(
-    polar=dict(radialaxis=dict(visible=True)),
-    title="Radar Chart Keterampilan",
+    polar=dict(
+        radialaxis=dict(visible=True, range=[0, max(radar_df["Value"]) + 5])
+    ),
     showlegend=False
 )
 st.plotly_chart(fig_radar, use_container_width=True)
 
 # ---------------------------
-# 10. Distribusi Goals
+# 9. Dataframe
 # ---------------------------
-st.subheader("📊 Distribusi Goals")
-fig_hist = px.histogram(
-    df_filtered, x="Goals",
-    color="Season",
-    marginal="box",
-    nbins=5,
-    title="Distribusi Goals per Pertandingan"
-)
-st.plotly_chart(fig_hist, use_container_width=True)
-
-# ---------------------------
-# 11. Data Table
-# ---------------------------
-st.subheader("📋 Data Detail")
-st.dataframe(df_filtered)
+st.subheader("📋 Detail Pertandingan")
+st.dataframe(df_filtered.sort_values(by="MatchDate", ascending=False))
