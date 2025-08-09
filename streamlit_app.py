@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import numpy as np
 
 # ---------------------------
 # 1. Konfigurasi Halaman
@@ -46,7 +45,6 @@ for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-# Home / Away
 df["HomeAway"] = df["Venue"].apply(lambda x: "Home" if x.strip().lower() == "home" else "Away")
 
 # ---------------------------
@@ -65,7 +63,60 @@ if selected_ha != "All":
     df_filtered = df_filtered[df_filtered["HomeAway"] == selected_ha]
 
 # ---------------------------
-# 5. Tren Musiman
+# 5. Ringkasan Statistik Menarik
+# ---------------------------
+st.subheader("📊 Ringkasan Statistik")
+
+total_goals = int(df_filtered["Goals"].sum())
+total_assists = int(df_filtered["Assists"].sum())
+total_shots = int(df_filtered["Shots"].sum())
+total_xg = round(df_filtered["xG"].sum(), 2)
+total_xag = round(df_filtered["xAG"].sum(), 2)
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+with col1:
+    st.markdown(f"""
+    <div style="background-color:#ff4b4b;padding:20px;border-radius:10px;text-align:center">
+        <h2 style="color:white">{total_goals}</h2>
+        <p style="color:white;font-weight:bold">Goals</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div style="background-color:#4bafff;padding:20px;border-radius:10px;text-align:center">
+        <h2 style="color:white">{total_assists}</h2>
+        <p style="color:white;font-weight:bold">Assists</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+    <div style="background-color:#4bff88;padding:20px;border-radius:10px;text-align:center">
+        <h2 style="color:white">{total_shots}</h2>
+        <p style="color:white;font-weight:bold">Shots</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col4:
+    st.markdown(f"""
+    <div style="background-color:#ff884b;padding:20px;border-radius:10px;text-align:center">
+        <h2 style="color:white">{total_xg}</h2>
+        <p style="color:white;font-weight:bold">Expected Goals (xG)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col5:
+    st.markdown(f"""
+    <div style="background-color:#aa4bff;padding:20px;border-radius:10px;text-align:center">
+        <h2 style="color:white">{total_xag}</h2>
+        <p style="color:white;font-weight:bold">Expected Assists (xAG)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------------------------
+# 6. Tren Musiman
 # ---------------------------
 st.subheader("📈 Tren Goals, Assists, xG per Musim")
 trend_df = df_filtered.groupby("Season")[["Goals", "Assists", "xG"]].sum().reset_index()
@@ -79,7 +130,7 @@ fig_trend = px.line(
 st.plotly_chart(fig_trend, use_container_width=True)
 
 # ---------------------------
-# 6. Scatter xG vs Goals
+# 7. Scatter xG vs Goals
 # ---------------------------
 st.subheader("⚽ Hubungan xG dengan Goals")
 fig_scatter = px.scatter(
@@ -93,7 +144,7 @@ fig_scatter = px.scatter(
 st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ---------------------------
-# 7. Heatmap Performansi
+# 8. Heatmap Performansi
 # ---------------------------
 st.subheader("🔥 Heatmap Statistik")
 heatmap_df = df_filtered.groupby("Opponent")[["Goals", "Assists", "xG", "xAG", "Shots"]].sum()
@@ -106,21 +157,21 @@ fig_heatmap = px.imshow(
 st.plotly_chart(fig_heatmap, use_container_width=True)
 
 # ---------------------------
-# 8. Radar Chart Keterampilan
+# 9. Radar Chart
 # ---------------------------
 st.subheader("🎯 Radar Chart: Keterampilan")
 radar_stats = {
-    "Goals": df_filtered["Goals"].sum(),
-    "Assists": df_filtered["Assists"].sum(),
-    "xG": df_filtered["xG"].sum(),
-    "xAG": df_filtered["xAG"].sum(),
-    "Shots": df_filtered["Shots"].sum(),
+    "Goals": total_goals,
+    "Assists": total_assists,
+    "xG": total_xg,
+    "xAG": total_xag,
+    "Shots": total_shots,
     "Progressive Passes": df_filtered["PrgP"].sum(),
     "Progressive Carries": df_filtered["PrgC"].sum()
 }
 categories = list(radar_stats.keys())
 values = list(radar_stats.values())
-values += values[:1]  # loop untuk radar
+values += values[:1]
 
 fig_radar = go.Figure()
 fig_radar.add_trace(go.Scatterpolar(
@@ -138,9 +189,9 @@ fig_radar.update_layout(
 st.plotly_chart(fig_radar, use_container_width=True)
 
 # ---------------------------
-# 9. Distribusi Shots & Goals
+# 10. Distribusi Goals
 # ---------------------------
-st.subheader("📊 Distribusi Shots & Goals")
+st.subheader("📊 Distribusi Goals")
 fig_hist = px.histogram(
     df_filtered, x="Goals",
     color="Season",
@@ -151,18 +202,7 @@ fig_hist = px.histogram(
 st.plotly_chart(fig_hist, use_container_width=True)
 
 # ---------------------------
-# 10. Tabel Data & Ringkasan
+# 11. Data Table
 # ---------------------------
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("### 📋 Data Detail")
-    st.dataframe(df_filtered)
-
-with col2:
-    st.markdown("### 📊 Ringkasan Statistik")
-    st.metric("Total Goals", df_filtered["Goals"].sum())
-    st.metric("Total Assists", df_filtered["Assists"].sum())
-    st.metric("Total Shots", df_filtered["Shots"].sum())
-    st.metric("Total xG", round(df_filtered["xG"].sum(), 2))
-    st.metric("Total xAG", round(df_filtered["xAG"].sum(), 2))
+st.subheader("📋 Data Detail")
+st.dataframe(df_filtered)
